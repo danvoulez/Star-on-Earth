@@ -1,0 +1,16 @@
+# CHIP v2 invalid-sm
+Description:
+An intentionally invalid example for validation diagnostics.
+Modules:
+Define module ALU:
+Summary: Arithmetic execution block.
+Operations: add, sub
+Inputs: a, b
+Outputs: out
+Instantiate:
+Create 0 instances of ALU
+Create 3 instances of Missing Module
+Connect:
+ALU -> Missing Module
+Broken connection
+Output: invalid design for diagnostics.

@@ -1,0 +1,35 @@
+# CHIP v2 blackwell-sm-ports
+Full Name: NVIDIA Blackwell Streaming Multiprocessor (Port-Level)
+Description:
+A textual representation of a streaming multiprocessor using port-level and memory-aware connectivity.
+Architecture Goals:
+- Express the SM as composable modules
+- Demonstrate port-level connectivity
+- Keep parsing deterministic and auditable
+Modules:
+Define module Warp Scheduler:
+Summary: Issues work to active warps.
+Operations: select, issue, stall
+Inputs: warp_state, ready_mask
+Outputs: selected_warp, issue_decision
+Define module Tensor Core:
+Summary: Executes matrix-oriented tensor operations.
+Operations: mma, accumulate, convert
+Inputs: operand_a, operand_b, accumulator
+Outputs: result_fragment
+Define module Register File:
+Summary: Stores per-thread register state.
+Operations: read, write, allocate
+Inputs: write_value, register_index, thread_id
+Outputs: read_value, allocation_status
+Instantiate:
+Create 4 instances of Warp Scheduler
+Create 8 instances of Tensor Core
+Create 1 instances of Register File
+Connect:
+Warp Scheduler.selected_warp -> Tensor Core.operand_a
+Tensor Core.result_fragment -> Register File.write_value
+Register File.read_value -> Shared Memory.write
+Memory:
+Shared Memory: 256 KB
+Output: Port-level SM tile with scheduling, tensor execution, register storage, and memory access.
