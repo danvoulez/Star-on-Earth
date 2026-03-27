@@ -49,7 +49,12 @@ cargo run -- validate examples/blackwell-sm-imported.chip
 cargo run -- validate examples/blackwell-sm-ports.chip --json
 cargo run -- validate examples/invalid-sm.chip --json
 cargo run -- explain examples/blackwell-sm-ports.chip
+cargo run -- ir examples/sm-memory.chip --json
 cargo run -- hash examples/blackwell-sm-imported.chip
+cargo run -- state-init examples/sm-memory.chip /tmp/sm.chipstate
+cargo run -- state-inspect /tmp/sm.chipstate
+cargo run -- state-checkpoint /tmp/sm.chipstate /tmp/sm-step1.chipstate step-1
+cargo run -- state-diff /tmp/sm.chipstate /tmp/sm-step1.chipstate --json
 ```
 
 ## Library
@@ -108,6 +113,50 @@ That semantic model includes:
 - resolved connection endpoints
 - total instance count
 - carried-through canonical hash
+
+## Runtime-oriented IR
+
+`build_runtime_ir()` lowers validated designs into a runtime-ready IR with:
+
+- explicit instance identities (`Module#N`)
+- typed memory classes (`Hbm`, `Sram`, `Cache`, `DiskBacked`, `Unified`, `Generic`)
+- parsed memory capacities in bytes (`KB`, `MB`, `GB`, `TB`, `KiB`, `MiB`, `GiB`, `TiB`)
+- deterministic IR hashing distinct from source canonical hash
+
+Use the CLI to inspect this layer:
+
+```bash
+cargo run -- ir examples/sm-memory.chip
+cargo run -- ir examples/sm-memory.chip --json
+```
+
+## `.chipstate` container (v1)
+
+The project now includes a persistent state artifact to carry machine state outside source text.
+
+State capabilities:
+
+- initialize a `.chipstate` file from a `.chip` spec via runtime IR
+- inspect metadata and region layout
+- hash state deterministically
+- checkpoint into a new state with parent lineage
+- diff two state files by region and dirty-page changes
+
+CLI:
+
+```bash
+cargo run -- state-init examples/sm-memory.chip /tmp/sm.chipstate
+cargo run -- state-inspect /tmp/sm.chipstate
+cargo run -- state-hash /tmp/sm.chipstate
+cargo run -- state-checkpoint /tmp/sm.chipstate /tmp/sm-step1.chipstate step-1
+cargo run -- state-diff /tmp/sm.chipstate /tmp/sm-step1.chipstate --json
+```
+
+`chipstate` v1 file layout:
+
+- magic header (`CHIPSTATEv1\0`)
+- little-endian metadata length
+- serialized metadata payload
 
 ## Connection grammar
 

@@ -1,21 +1,161 @@
 use chip_as_text::{
-    canonical_hash, canonical_text, elaborate, parse_file, validate, Diagnostic, SourceSpan,
-    ValidationReport,
+    build_runtime_ir, canonical_hash, canonical_text, checkpoint_state, diff_states, elaborate,
+    initialize_state, load_state, parse_file, save_state, state_hash, validate, Diagnostic,
+    SourceSpan, ValidationReport,
 };
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
-    if args.len() < 3 {
+    if args.len() < 2 {
         print_usage();
         return;
     }
 
     let command = args[1].as_str();
-    let path = &args[2];
-    let flags = &args[3..];
-    let json = flags.iter().any(|flag| flag == "--json");
+    let json = args.iter().any(|flag| flag == "--json");
 
+    match command {
+        "parse" | "hash" | "validate" | "explain" | "ir" => {
+            if args.len() < 3 {
+                print_usage();
+                return;
+            }
+            let path = &args[2];
+            let flags = &args[3..];
+            run_definition_command(command, path, flags, json);
+        }
+        "state-init" => {
+            if args.len() < 4 {
+                print_usage();
+                return;
+            }
+            let chip_path = &args[2];
+            let out_path = &args[3];
+            let checkpoint_label = args
+                .iter()
+                .position(|v| v == "--label")
+                .and_then(|idx| args.get(idx + 1))
+                .cloned();
+
+            match parse_file(chip_path) {
+                Ok(def) => match build_runtime_ir(&def) {
+                    Ok(ir) => {
+                        let mut state = initialize_state(&ir);
+                        if let Some(label) = checkpoint_label {
+                            state.lineage.checkpoint_label = Some(label);
+                        }
+                        match save_state(out_path, &state) {
+                            Ok(()) => {
+                                if json {
+                                    print_json(&state);
+                                } else {
+                                    println!("Initialized chipstate: {}", out_path);
+                                    println!("Design: {}", state.design_name);
+                                    println!("Regions: {}", state.regions.len());
+                                    println!("State Hash: {}", state_hash(&state));
+                                }
+                            }
+                            Err(err) => eprintln!("State write error: {}", err),
+                        }
+                    }
+                    Err(diagnostics) => print_diagnostic_list(&diagnostics, json),
+                },
+                Err(e) => eprintln!("Parse error: {}", e),
+            }
+        }
+        "state-inspect" => {
+            if args.len() < 3 {
+                print_usage();
+                return;
+            }
+            let state_path = &args[2];
+            match load_state(state_path) {
+                Ok(state) => {
+                    if json {
+                        print_json(&state);
+                    } else {
+                        println!("ChipState summary");
+                        println!("Design: {}", state.design_name);
+                        println!("Design Hash: {}", state.design_hash);
+                        println!("Regions: {}", state.regions.len());
+                        println!("Page Size: {}", state.page_size);
+                        println!("Created: {}", state.created_unix_seconds);
+                        println!("State Hash: {}", state_hash(&state));
+                    }
+                }
+                Err(err) => eprintln!("State read error: {}", err),
+            }
+        }
+        "state-hash" => {
+            if args.len() < 3 {
+                print_usage();
+                return;
+            }
+            match load_state(&args[2]) {
+                Ok(state) => println!("{}", state_hash(&state)),
+                Err(err) => eprintln!("State read error: {}", err),
+            }
+        }
+        "state-checkpoint" => {
+            if args.len() < 5 {
+                print_usage();
+                return;
+            }
+            let input = &args[2];
+            let output = &args[3];
+            let label = &args[4];
+
+            match load_state(input) {
+                Ok(state) => {
+                    let checkpoint = checkpoint_state(&state, label.clone());
+                    match save_state(output, &checkpoint) {
+                        Ok(()) => {
+                            if json {
+                                print_json(&checkpoint);
+                            } else {
+                                println!("Checkpoint written: {}", output);
+                                println!("Label: {}", label);
+                                println!("Parent: {}", state_hash(&state));
+                                println!("Checkpoint Hash: {}", state_hash(&checkpoint));
+                            }
+                        }
+                        Err(err) => eprintln!("State write error: {}", err),
+                    }
+                }
+                Err(err) => eprintln!("State read error: {}", err),
+            }
+        }
+        "state-diff" => {
+            if args.len() < 4 {
+                print_usage();
+                return;
+            }
+            let a_path = &args[2];
+            let b_path = &args[3];
+
+            match (load_state(a_path), load_state(b_path)) {
+                (Ok(a), Ok(b)) => {
+                    let diff = diff_states(&a, &b);
+                    if json {
+                        print_json(&diff);
+                    } else {
+                        println!("State diff");
+                        println!("Same Design Hash: {}", diff.same_design_hash);
+                        println!("Added Regions: {}", diff.added_regions.len());
+                        println!("Removed Regions: {}", diff.removed_regions.len());
+                        println!("Resized Regions: {}", diff.resized_regions.len());
+                        println!("Changed Page Sets: {}", diff.changed_pages.len());
+                    }
+                }
+                (Err(err), _) | (_, Err(err)) => eprintln!("State read error: {}", err),
+            }
+        }
+        _ => print_usage(),
+    }
+}
+
+fn run_definition_command(command: &str, path: &str, flags: &[String], json: bool) {
     match command {
         "parse" => match parse_file(path) {
             Ok(def) => {
@@ -69,15 +209,28 @@ fn main() {
                         print_elaborated_summary(&elaborated);
                     }
                 }
-                Err(diagnostics) => {
+                Err(diagnostics) => print_diagnostic_list(&diagnostics, json),
+            },
+            Err(e) => eprintln!("Parse error: {}", e),
+        },
+        "ir" => match parse_file(path) {
+            Ok(def) => match build_runtime_ir(&def) {
+                Ok(ir) => {
                     if json {
-                        print_json(&diagnostics);
+                        print_json(&ir);
                     } else {
-                        for diagnostic in diagnostics {
-                            print_diagnostic(&diagnostic);
-                        }
+                        println!("Runtime IR summary");
+                        println!("Kind: {}", ir.kind);
+                        println!("Name: {}", ir.name);
+                        println!("Modules: {}", ir.modules.len());
+                        println!("Instances: {}", ir.instances.len());
+                        println!("Memory Blocks: {}", ir.memory_blocks.len());
+                        println!("Connections: {}", ir.connections.len());
+                        println!("Source Hash: {}", ir.source_hash);
+                        println!("IR Hash: {}", ir.ir_hash);
                     }
                 }
+                Err(diagnostics) => print_diagnostic_list(&diagnostics, json),
             },
             Err(e) => eprintln!("Parse error: {}", e),
         },
@@ -85,7 +238,17 @@ fn main() {
     }
 }
 
-fn print_json<T: serde::Serialize>(value: &T) {
+fn print_diagnostic_list(diagnostics: &[Diagnostic], json: bool) {
+    if json {
+        print_json(diagnostics);
+    } else {
+        for diagnostic in diagnostics {
+            print_diagnostic(diagnostic);
+        }
+    }
+}
+
+fn print_json<T: serde::Serialize + ?Sized>(value: &T) {
     match serde_json::to_string_pretty(value) {
         Ok(json) => println!("{}", json),
         Err(err) => eprintln!("JSON serialization error: {}", err),
@@ -125,7 +288,10 @@ fn print_elaborated_summary(elaborated: &chip_as_text::ElaboratedDesign) {
     for module in &elaborated.modules {
         println!(
             "- {} (instances: {}, inbound: {}, outbound: {})",
-            module.name, module.instance_count, module.inbound_connections, module.outbound_connections
+            module.name,
+            module.instance_count,
+            module.inbound_connections,
+            module.outbound_connections
         );
     }
     if !elaborated.connections.is_empty() {
@@ -163,7 +329,10 @@ fn print_diagnostic(diagnostic: &Diagnostic) {
 fn format_span(span: Option<&SourceSpan>) -> String {
     match span {
         Some(span) if span.line_start == span.line_end => {
-            format!("line {}:{}-{}", span.line_start, span.column_start, span.column_end)
+            format!(
+                "line {}:{}-{}",
+                span.line_start, span.column_start, span.column_end
+            )
         }
         Some(span) => format!(
             "lines {}:{} -> {}:{}",
@@ -183,4 +352,11 @@ fn print_usage() {
     println!("  chip validate <file> --json");
     println!("  chip explain <file>");
     println!("  chip explain <file> --json");
+    println!("  chip ir <file>");
+    println!("  chip ir <file> --json");
+    println!("  chip state-init <chip-file> <state-file> [--label <checkpoint>] [--json]");
+    println!("  chip state-inspect <state-file> [--json]");
+    println!("  chip state-hash <state-file>");
+    println!("  chip state-checkpoint <state-file> <new-state-file> <label> [--json]");
+    println!("  chip state-diff <state-a> <state-b> [--json]");
 }

@@ -236,13 +236,9 @@ pub fn parse_file(path: impl AsRef<Path>) -> Result<Definition, String> {
 
 pub fn resolve_imports_from_file(path: impl AsRef<Path>) -> Result<String, String> {
     let path = path.as_ref();
-    let canonical = path.canonicalize().map_err(|e| {
-        format!(
-            "Failed to canonicalize '{}': {}",
-            path.display(),
-            e
-        )
-    })?;
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize '{}': {}", path.display(), e))?;
 
     let mut stack = Vec::<PathBuf>::new();
     resolve_imports_inner(&canonical, &mut stack)
@@ -262,9 +258,12 @@ fn resolve_imports_inner(path: &Path, stack: &mut Vec<PathBuf>) -> Result<String
 
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read '{}': {}", path.display(), e))?;
-    let base_dir = path
-        .parent()
-        .ok_or_else(|| format!("Could not determine parent directory for '{}'", path.display()))?;
+    let base_dir = path.parent().ok_or_else(|| {
+        format!(
+            "Could not determine parent directory for '{}'",
+            path.display()
+        )
+    })?;
 
     let mut output = String::new();
 
@@ -575,7 +574,11 @@ mod tests {
         let root = dir.join("root.chip");
         let imported = dir.join("imported.chip");
 
-        fs::write(&imported, "# MEMORY v2 secondary\nDescription:\nNope\nOutput: x\n").unwrap();
+        fs::write(
+            &imported,
+            "# MEMORY v2 secondary\nDescription:\nNope\nOutput: x\n",
+        )
+        .unwrap();
         fs::write(
             &root,
             "# CHIP v2 primary\nDescription:\nRoot\nIMPORT imported.chip\nOutput: y\n",
@@ -592,7 +595,11 @@ mod tests {
         let a = dir.join("a.chip");
         let b = dir.join("b.chipfrag");
 
-        fs::write(&a, "# CHIP v2 cycle\nDescription:\nA\nIMPORT b.chipfrag\nOutput: z\n").unwrap();
+        fs::write(
+            &a,
+            "# CHIP v2 cycle\nDescription:\nA\nIMPORT b.chipfrag\nOutput: z\n",
+        )
+        .unwrap();
         fs::write(&b, "IMPORT a.chip\n").unwrap();
 
         let err = parse_file(&a).unwrap_err();
