@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::parser::{Definition, MemoryBlock};
 use crate::semantic::{elaborate, ConnectionTargetKind, Diagnostic};
@@ -31,7 +31,7 @@ pub struct IrInstance {
     pub module_name: String,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MemoryClass {
     Hbm,
     Sram,
