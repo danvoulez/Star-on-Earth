@@ -1,6 +1,6 @@
 use chip_as_text::{
-    canonical_hash, canonical_text, elaborate, parse_file, validate, Diagnostic, SourceSpan,
-    ValidationReport,
+    build_runtime_ir, canonical_hash, canonical_text, elaborate, parse_file, validate, Diagnostic,
+    SourceSpan, ValidationReport,
 };
 
 fn main() {
@@ -81,6 +81,35 @@ fn main() {
             },
             Err(e) => eprintln!("Parse error: {}", e),
         },
+        "ir" => match parse_file(path) {
+            Ok(def) => match build_runtime_ir(&def) {
+                Ok(ir) => {
+                    if json {
+                        print_json(&ir);
+                    } else {
+                        println!("Runtime IR summary");
+                        println!("Kind: {}", ir.kind);
+                        println!("Name: {}", ir.name);
+                        println!("Modules: {}", ir.modules.len());
+                        println!("Instances: {}", ir.instances.len());
+                        println!("Memory Blocks: {}", ir.memory_blocks.len());
+                        println!("Connections: {}", ir.connections.len());
+                        println!("Source Hash: {}", ir.source_hash);
+                        println!("IR Hash: {}", ir.ir_hash);
+                    }
+                }
+                Err(diagnostics) => {
+                    if json {
+                        print_json(&diagnostics);
+                    } else {
+                        for diagnostic in diagnostics {
+                            print_diagnostic(&diagnostic);
+                        }
+                    }
+                }
+            },
+            Err(e) => eprintln!("Parse error: {}", e),
+        },
         _ => print_usage(),
     }
 }
@@ -125,7 +154,10 @@ fn print_elaborated_summary(elaborated: &chip_as_text::ElaboratedDesign) {
     for module in &elaborated.modules {
         println!(
             "- {} (instances: {}, inbound: {}, outbound: {})",
-            module.name, module.instance_count, module.inbound_connections, module.outbound_connections
+            module.name,
+            module.instance_count,
+            module.inbound_connections,
+            module.outbound_connections
         );
     }
     if !elaborated.connections.is_empty() {
@@ -163,7 +195,10 @@ fn print_diagnostic(diagnostic: &Diagnostic) {
 fn format_span(span: Option<&SourceSpan>) -> String {
     match span {
         Some(span) if span.line_start == span.line_end => {
-            format!("line {}:{}-{}", span.line_start, span.column_start, span.column_end)
+            format!(
+                "line {}:{}-{}",
+                span.line_start, span.column_start, span.column_end
+            )
         }
         Some(span) => format!(
             "lines {}:{} -> {}:{}",
@@ -183,4 +218,6 @@ fn print_usage() {
     println!("  chip validate <file> --json");
     println!("  chip explain <file>");
     println!("  chip explain <file> --json");
+    println!("  chip ir <file>");
+    println!("  chip ir <file> --json");
 }

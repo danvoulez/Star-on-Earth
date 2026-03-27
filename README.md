@@ -49,6 +49,7 @@ cargo run -- validate examples/blackwell-sm-imported.chip
 cargo run -- validate examples/blackwell-sm-ports.chip --json
 cargo run -- validate examples/invalid-sm.chip --json
 cargo run -- explain examples/blackwell-sm-ports.chip
+cargo run -- ir examples/sm-memory.chip --json
 cargo run -- hash examples/blackwell-sm-imported.chip
 ```
 
@@ -108,6 +109,22 @@ That semantic model includes:
 - resolved connection endpoints
 - total instance count
 - carried-through canonical hash
+
+## Runtime-oriented IR
+
+`build_runtime_ir()` lowers validated designs into a runtime-ready IR with:
+
+- explicit instance identities (`Module#N`)
+- typed memory classes (`Hbm`, `Sram`, `Cache`, `DiskBacked`, `Unified`, `Generic`)
+- parsed memory capacities in bytes (`KB`, `MB`, `GB`, `TB`, `KiB`, `MiB`, `GiB`, `TiB`)
+- deterministic IR hashing distinct from source canonical hash
+
+Use the CLI to inspect this layer:
+
+```bash
+cargo run -- ir examples/sm-memory.chip
+cargo run -- ir examples/sm-memory.chip --json
+```
 
 ## Connection grammar
 

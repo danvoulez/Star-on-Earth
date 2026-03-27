@@ -549,13 +549,18 @@ fn compute_module_connection_counts(
 }
 
 fn has_multiple_subgraphs(edges: &[ElaboratedConnection]) -> bool {
-    let mut adjacency: BTreeMap<(ConnectionTargetKind, String), BTreeSet<(ConnectionTargetKind, String)>> =
-        BTreeMap::new();
+    let mut adjacency: BTreeMap<
+        (ConnectionTargetKind, String),
+        BTreeSet<(ConnectionTargetKind, String)>,
+    > = BTreeMap::new();
 
     for edge in edges {
         let from = (edge.from.kind.clone(), edge.from.component.clone());
         let to = (edge.to.kind.clone(), edge.to.component.clone());
-        adjacency.entry(from.clone()).or_default().insert(to.clone());
+        adjacency
+            .entry(from.clone())
+            .or_default()
+            .insert(to.clone());
         adjacency.entry(to).or_default().insert(from);
     }
 
@@ -598,7 +603,11 @@ fn build_elaborated(def: &Definition) -> ElaboratedDesign {
     let valid_connections = def
         .connect
         .iter()
-        .filter_map(|connection| validate_connection(connection, &module_map, &memory_map).ok().flatten())
+        .filter_map(|connection| {
+            validate_connection(connection, &module_map, &memory_map)
+                .ok()
+                .flatten()
+        })
         .collect::<Vec<_>>();
 
     let (inbound, outbound) = compute_module_connection_counts(&valid_connections);
@@ -743,8 +752,14 @@ mod tests {
         assert!(report.is_valid);
         let elaborated = report.elaborated.unwrap();
         assert_eq!(elaborated.connections.len(), 3);
-        assert_eq!(elaborated.connections[0].from.port.as_deref(), Some("selected_warp"));
-        assert_eq!(elaborated.connections[0].to.port.as_deref(), Some("operand_a"));
+        assert_eq!(
+            elaborated.connections[0].from.port.as_deref(),
+            Some("selected_warp")
+        );
+        assert_eq!(
+            elaborated.connections[0].to.port.as_deref(),
+            Some("operand_a")
+        );
     }
 
     #[test]
